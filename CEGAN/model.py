@@ -220,7 +220,7 @@ class CEGAN(nn.Module):
         n_conv_edge=3,
         h_fea_edge=128,
         h_fea_angle=128,
-        n_classification=2,
+        # n_classification=2,
         pooling=False,
         embedding=False,
     ):
@@ -253,7 +253,7 @@ class CEGAN(nn.Module):
         self.bn = nn.LayerNorm(h_fea_edge + h_fea_angle)
         self.conv_to_fc_softplus = nn.Softplus()
 
-        self.out = nn.Linear(h_fea_edge + h_fea_angle, n_classification)
+        # self.out = nn.Linear(h_fea_edge + h_fea_angle, n_classification)
 
         self.dropout = nn.Dropout()
 
@@ -296,18 +296,19 @@ class CEGAN(nn.Module):
             # print("pooled",crys_fea.shape)
 
         crys_fea = self.conv_to_fc_softplus(self.bn(crys_fea))
-        if self.embedding:
-            embed = crys_fea
-
         crys_fea = self.dropout(crys_fea)
-        out = self.out(crys_fea)
+        
+        # if self.embedding:
+        #     embed = crys_fea
+
+        # out = self.out(crys_fea)
         # print(out.shape)
 
         if self.embedding:
-            return out, embed
+            return crys_fea
 
         else:
-            return out
+            return crys_fea
 
     def pool(self, atom_fea, crys_idx):
 
