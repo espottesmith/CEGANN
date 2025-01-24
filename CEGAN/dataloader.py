@@ -16,36 +16,7 @@ def get_train_val_test_loader(
     pin_memory=False,
     **kwargs,
 ):
-    """
-    Utility function for dividing a dataset to train, val, test datasets.
 
-    !!! The dataset needs to be shuffled before using the function !!!
-
-    Parameters
-    ----------
-    dataset: torch.utils.data.Dataset
-      The full dataset to be divided.
-    collate_fn: torch.utils.data.DataLoader
-    batch_size: int
-    train_ratio: float
-    val_ratio: float
-    test_ratio: float
-    return_test: bool
-      Whether to return the test dataset loader. If False, the last test_size
-      data will be hidden.
-    num_workers: int
-    pin_memory: bool
-
-    Returns
-    -------
-    train_loader: torch.utils.data.DataLoader
-      DataLoader that random samples the training data.
-    val_loader: torch.utils.data.DataLoader
-      DataLoader that random samples the validation data.
-    (test_loader): torch.utils.data.DataLoader
-      DataLoader that random samples the test data, returns if
-        return_test=True.
-    """
     total_size = dataset.size
 
     if kwargs['train_size'] is None:
@@ -115,3 +86,34 @@ def get_train_val_test_loader(
         )
 
     return train_loader, val_loader, test_loader
+
+
+from torchvision import datasets, transforms
+
+# Create an unsupervised dataset by ignoring labels
+# class UnsupervisedDataset(datasets.MNIST):
+#     def __getitem__(self, index):
+#         # data, _ = super().__getitem__(index)
+#         # 
+#         return data
+
+# Example usage
+# dataset = UnsupervisedDataset(
+#     root="./data", train=True, download=True, transform=transforms.ToTensor()
+# )
+# train_loader, val_loader, test_loader = get_train_val_test_loader(dataset)
+
+class UnsupervisedDataset:
+    def __init__(self, data):
+        self.data = data
+        self.size = len(data)
+
+    def __len__(self):
+        return self.size
+
+    def __getitem__(self, index):
+        return self.data[index]
+
+# datasets = UnsupervisedDataset(classification_dataset)
+# dataset = UnsupervisedDataset(classification_dataset)
+# train_loader, val_loader, test_loader = get_train_val_test_loader(dataset)
