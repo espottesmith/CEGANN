@@ -6,6 +6,7 @@ from pymatgen.core.periodic_table import Element
 from sklearn.preprocessing import LabelBinarizer
 from torch.utils.data import Dataset
 
+
 from utilis import convert
 
 torch.set_default_dtype(torch.float32)
@@ -38,7 +39,7 @@ class Graph(object):
         if self.rcut > 0:
             pass
         else:
-            species = [site.specie.symbol for site in structure.sites]
+            species = [site.specie.symbol for site in structure.sites]  
             self.rcut = max(
                 [Element(elm).atomic_radius * 3 for elm in species]
             )
@@ -195,26 +196,26 @@ class CrystalGraphDataset(Dataset):
 
         self.graphs = [res[0] for res in results if res is not None]
 
-        self.targets = [
-            torch.LongTensor(res[1]) for res in results if res is not None
-        ]
+        # self.targets = [
+        #     torch.LongTensor(res[1]) for res in results if res is not None
+        # ]
         # print(self.targets)
-        self.binarizer = LabelBinarizer()
-        self.binarizer.fit(torch.cat(self.targets))
+        # self.binarizer = LabelBinarizer()
+        # self.binarizer.fit(torch.cat(self.targets))
 
         t2 = time()
         print("Total time taken {}".format(convert(t2 - t1)))
 
-        self.size = len(self.targets)
+        # self.size = len(self.targets)
+        self.size = len(self.graphs)
 
     def collate(self, datalist):
 
-        bond_feature, nbr_idx, angular_feature, crys_idx, targets = (
+        bond_feature, nbr_idx, angular_feature, crys_idx = (
             [],
             [],
             [],
-            [],
-            [],
+            []
         )
 
         index = 0
@@ -227,7 +228,7 @@ class CrystalGraphDataset(Dataset):
 
             nbr_idx.append(idx + index)
             crys_idx.append([index, index + Natoms])
-            targets.append(targ)
+            # targets.append(targ)
             index += Natoms
 
         return (
@@ -235,7 +236,7 @@ class CrystalGraphDataset(Dataset):
             torch.cat(angular_feature, dim=0),
             torch.cat(nbr_idx, dim=0),
             torch.LongTensor(crys_idx),
-            torch.cat(targets, dim=0),
+            # torch.cat(targets, dim=0),
         )
 
     def __getitem__(self, idx):
@@ -244,9 +245,9 @@ class CrystalGraphDataset(Dataset):
         bond_feature = graph.bond
         nbr_idx = graph.nbr
         angular_feature = graph.angle_cosines
-        target = self.targets[idx]
+        # target = self.targets[idx]
 
-        return (bond_feature, nbr_idx, angular_feature), target
+        return (bond_feature, nbr_idx, angular_feature)
 
 
 # --------------------------------------------
@@ -256,7 +257,7 @@ def prepare_batch_fn(batch, device, non_blocking):
 
     # print(device,non_blocking)
 
-    (bond_feature, angular_feature, nbr_idx, crys_idx, target) = batch
+    (bond_feature, angular_feature, nbr_idx, crys_idx) = batch
 
     # print(crys_idx)
 
@@ -265,7 +266,7 @@ def prepare_batch_fn(batch, device, non_blocking):
         angular_feature.to(device, non_blocking=non_blocking),
         nbr_idx.to(device, non_blocking=non_blocking),
         crys_idx.to(device, non_blocking=non_blocking),
-    ), target.to(device, non_blocking=non_blocking)
+    )
 
 
 # ----------------------------
