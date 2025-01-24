@@ -80,7 +80,7 @@ def train(
 
     # -----------losss--------------------
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.MSELoss()
     val_metrics = {
         # "rocauc": ROC_AUC_multiclass()
         "accuracy": Accuracy(),
@@ -98,13 +98,13 @@ def train(
         )
 
     if settings.optimizer == "sgd":
-        optimizer = optim.SGD(
+        optimizer = torch.optim.SGD(
             model.parameters(),
             lr=settings.learning_rate,
             momentum=settings.momentum,
         )
 
-    # ------------tariner---------------
+    # ------------trainer---------------
 
     trainer = create_supervised_trainer(
         model,
@@ -114,14 +114,14 @@ def train(
         device=device,
     )
 
-    @trainer.on(Events.ITERATION_COMPLETED)
-    def log_training_loss(engine):
-        global total_batch_loss
-        global iteration_count
-        total_batch_loss += engine.state.output
-        iteration_count += 1
+    # @trainer.on(Events.ITERATION_COMPLETED)
+    # def log_training_loss(engine):
+    #     global total_batch_loss
+    #     global iteration_count
+    #     total_batch_loss += engine.state.output
+    #     iteration_count += 1
 
-    # ----------scheduler-------------------
+    # ----------scheduler------------------- 
 
     if settings.scheduler:
 
@@ -218,7 +218,7 @@ def train(
         total_batch_loss, iteration_count = 0, 0
 
         # print("validating")
-        epoch = engine.state.epoch
+        # epoch = engine.state.epoch
 
         evaluator.run(val_loader)
 
@@ -300,9 +300,9 @@ for file in poscars:
 
     dictionary = {
         "structure": poscar.structure,
-        "target": np.array(
-            [float(lab) for lab in poscar.comment.split(",")], dtype="int"
-        ),
+        # "target": np.array(
+        #     [float(lab) for lab in poscar.comment.split(",")], dtype="int"
+        # ),
     }
 
     classification_dataset.append(dictionary)
@@ -334,7 +334,7 @@ net = CEGAN(
     n_conv_edge=settings.n_conv_edge,
     h_fea_edge=settings.h_fea_edge,
     h_fea_angle=settings.h_fea_angle,
-    n_classification=settings.n_classification,
+    # n_classification=settings.n_classification,
     pooling=settings.pooling,
     embedding=settings.embedding,
 )
