@@ -112,15 +112,16 @@ class load_graphs_targets(object):
     if not from database
     '''
 
-    def __init__(self, neighbors=12, rcut=0, delta=1):
+    def __init__(self, neighbors=12, rcut=0, delta=1, supervised=True):
 
         self.neighbors = neighbors
         self.rcut = rcut
         self.delta = delta
+        self.supervised = supervised
 
     def load(self, data):
         structure = data["structure"]
-        target = data["target"]
+        target = data.get("target")
         # print(target)
         graph = Graph(
             neighbors=self.neighbors, rcut=self.rcut, delta=self.delta
@@ -129,7 +130,11 @@ class load_graphs_targets(object):
         # print("graphs")
         graph.setGraphFea(structure)
         # print("graphs done")
-        return (graph, target)
+
+        if target is not None and self.supervised:
+            return (graph, target)
+        else:
+            return graph
         # except:
         #    return None
 
@@ -168,6 +173,7 @@ class CrystalGraphDataset(Dataset):
         mp_load=False,
         mp_pool=None,
         mp_cpu_count=None,
+        supervised=supervised
         **kwargs
     ):
 
@@ -177,10 +183,13 @@ class CrystalGraphDataset(Dataset):
 
         t1 = time()
 
+        self.supervised = supervised
+
         load_graphs = load_graphs_targets(
             neighbors=neighbors,
             rcut=rcut,
             delta=delta,
+            supervised=self.supervised
         )
 
         results = process(
@@ -193,50 +202,79 @@ class CrystalGraphDataset(Dataset):
 
         # print(results)
 
-        self.graphs = [res[0] for res in results if res is not None]
+        if self.supervised:
+            self.graphs = [res[0] for res in results if res is not None]
 
-        self.targets = [
-            torch.LongTensor(res[1]) for res in results if res is not None
-        ]
-        # print(self.targets)
-        self.binarizer = LabelBinarizer()
-        self.binarizer.fit(torch.cat(self.targets))
+            self.targets = [
+                torch.LongTensor(res[1]) for res in results if res is not None
+            ]
+            # print(self.targets)
+            self.binarizer = LabelBinarizer()
+            self.binarizer.fit(torch.cat(self.targets))
+        else:
+            self.graphs = [res for res in results if res is not None]
+            self.targets = None
+            self.binarizer = None
 
         t2 = time()
         print("Total time taken {}".format(convert(t2 - t1)))
 
-        self.size = len(self.targets)
+        self.size = len(self.graphs)
 
     def collate(self, datalist):
-
-        bond_feature, nbr_idx, angular_feature, crys_idx, targets = (
-            [],
-            [],
-            [],
-            [],
-            [],
-        )
-
         index = 0
 
-        for (bond_fea, idx, angular_fea), targ in datalist:
-            Natoms = bond_fea.shape[0]
+        if self.supervised:
+            bond_feature, nbr_idx, angular_feature, crys_idx, targets = (
+                [],
+                [],
+                [],
+                [],
+                [],
+            )
 
-            bond_feature.append(bond_fea)
-            angular_feature.append(angular_fea)
+            for (bond_fea, idx, angular_fea), targ in datalist:
+                Natoms = bond_fea.shape[0]
 
-            nbr_idx.append(idx + index)
-            crys_idx.append([index, index + Natoms])
-            targets.append(targ)
-            index += Natoms
+                bond_feature.append(bond_fea)
+                angular_feature.append(angular_fea)
 
-        return (
-            torch.cat(bond_feature, dim=0),
-            torch.cat(angular_feature, dim=0),
-            torch.cat(nbr_idx, dim=0),
-            torch.LongTensor(crys_idx),
-            torch.cat(targets, dim=0),
-        )
+                nbr_idx.append(idx + index)
+                crys_idx.append([index, index + Natoms])
+                targets.append(targ)
+                index += Natoms
+
+            return (
+                torch.cat(bond_feature, dim=0),
+                torch.cat(angular_feature, dim=0),
+                torch.cat(nbr_idx, dim=0),
+                torch.LongTensor(crys_idx),
+                torch.cat(targets, dim=0),
+            )
+        else:
+            bond_feature, nbr_idx, angular_feature, crys_idx = (
+                [],
+                [],
+                [],
+                []
+            )
+
+            for (bond_fea, idx, angular_fea) in datalist:
+                Natoms = bond_fea.shape[0]
+
+                bond_feature.append(bond_fea)
+                angular_feature.append(angular_fea)
+
+                nbr_idx.append(idx + index)
+                crys_idx.append([index, index + Natoms])
+                index += Natoms
+
+            return (
+                torch.cat(bond_feature, dim=0),
+                torch.cat(angular_feature, dim=0),
+                torch.cat(nbr_idx, dim=0),
+                torch.LongTensor(crys_idx),
+            )
 
     def __getitem__(self, idx):
 
@@ -244,28 +282,40 @@ class CrystalGraphDataset(Dataset):
         bond_feature = graph.bond
         nbr_idx = graph.nbr
         angular_feature = graph.angle_cosines
-        target = self.targets[idx]
 
-        return (bond_feature, nbr_idx, angular_feature), target
+        if self.supervised:
+            target = self.targets[idx]
+
+            return (bond_feature, nbr_idx, angular_feature), target
+        else:
+            return (bond_feature, nbr_idx, angular_feature)
 
 
 # --------------------------------------------
 
 
-def prepare_batch_fn(batch, device, non_blocking):
+def prepare_batch_fn(batch, device, non_blocking, supervised=True):
 
     # print(device,non_blocking)
-
-    (bond_feature, angular_feature, nbr_idx, crys_idx, target) = batch
+    if supervised:
+        (bond_feature, angular_feature, nbr_idx, crys_idx, target) = batch
+        return (
+            bond_feature.to(device, non_blocking=non_blocking),
+            angular_feature.to(device, non_blocking=non_blocking),
+            nbr_idx.to(device, non_blocking=non_blocking),
+            crys_idx.to(device, non_blocking=non_blocking),
+        ), target.to(device, non_blocking=non_blocking)
+    else:
+        (bond_feature, angular_feature, nbr_idx, crys_idx) = batch
+        return (
+            bond_feature.to(device, non_blocking=non_blocking),
+            angular_feature.to(device, non_blocking=non_blocking),
+            nbr_idx.to(device, non_blocking=non_blocking),
+            crys_idx.to(device, non_blocking=non_blocking),
+        )
 
     # print(crys_idx)
 
-    return (
-        bond_feature.to(device, non_blocking=non_blocking),
-        angular_feature.to(device, non_blocking=non_blocking),
-        nbr_idx.to(device, non_blocking=non_blocking),
-        crys_idx.to(device, non_blocking=non_blocking),
-    ), target.to(device, non_blocking=non_blocking)
 
 
 # ----------------------------

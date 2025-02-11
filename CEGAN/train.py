@@ -17,11 +17,18 @@ from ignite.engine import (
 from ignite.handlers.param_scheduler import LRScheduler
 from ignite.metrics import Accuracy
 from natsort import natsorted
-from pymatgen.io.vasp.inputs import Poscar
+
+from monty.serialization import loadfn, dumpfn
+
+from pymatgen.io.vasp.inputs import Poscar 
+from pymatgen.core.structure import Structure
 from torch.optim.lr_scheduler import StepLR
 
 from dataloader import get_train_val_test_loader
+
 from graph import CrystalGraphDataset, prepare_batch_fn
+
+from model import CEGAN
 
 # from ignite.contrib.handlers.tensorboard_logger import *
 from settings import Settings
@@ -274,10 +281,7 @@ def train(
     trainer.run(train_loader, max_epochs=settings.epochs)
 
 
-# # Settings
-
-# In[20]:
-
+# Settings
 
 if os.path.exists("custom_config.yaml"):
     with open("custom_config.yaml", "r") as file:
@@ -289,13 +293,17 @@ else:
 
 # # Loading dataset
 
+classification_dataset = []
 
 poscars = natsorted(glob("{}/*.POSCAR".format(training_data)))
 
-
-classification_dataset = []
-
-for file in poscars:
+# TODO: make sure we can get to JSON in appropriate structure
+if len(poscars) == 0:
+    json_files = natsorted(glob("{}/*.json").format(training_data))
+    for json in json_files:
+        classification_dataset.extend(loadfn(json))
+else:
+    for file in poscars:
     poscar = Poscar.from_file(file)
 
     dictionary = {
@@ -307,8 +315,10 @@ for file in poscars:
 
     classification_dataset.append(dictionary)
 
-
-# In[22]:
+if all(x.get("target") for x in classification_dataset) and settings.supervised:
+    supervised = True
+else:
+    supervised = False
 
 
 # -----------data loading-----------------------
@@ -318,16 +328,10 @@ graphs = CrystalGraphDataset(
     neighbors=settings.neighbors,
     rcut=settings.rcut,
     delta=settings.search_delta,
+    supervised=supervised
 )
 
-
-# # Model
-
-# In[23]:
-
-
-from model import CEGAN
-
+# TODO: change this
 net = CEGAN(
     settings.gbf_bond,
     settings.gbf_angle,
@@ -337,6 +341,7 @@ net = CEGAN(
     n_classification=settings.n_classification,
     pooling=settings.pooling,
     embedding=settings.embedding,
+    supervised=supervised
 )
 
-train(graphs, settings, net, output_dir=checkpoint_dir, screen_log=logfile)
+train(graphs, settings, net, output_dir=checkpoint_dir, screen_log=logfile, supervised=supervised)

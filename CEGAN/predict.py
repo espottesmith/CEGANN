@@ -10,6 +10,7 @@ import torch
 import yaml
 from natsort import natsorted
 from pymatgen.io.vasp.inputs import Poscar
+from pymatgen.core.structure import Structure
 
 from graph import CrystalGraphDataset, prepare_batch_fn
 
